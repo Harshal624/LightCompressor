@@ -109,29 +109,23 @@ class VideoCompressor private constructor(private val uri: Uri): CoroutineScope 
     ) {
         var streamableFile: File? = null
         job = launch {
-
-            val job = async { getMediaPath(context, uri) }
-            val path = job.await()
-
             val desFile = saveVideoFile(
                 context,
-                path,
+                null,
                 sharedStorageConfiguration,
                 appSpecificStorageConfiguration,
                 isStreamable,
-                configuration.videoName,
-                shouldSave = false
+                configuration.videoName
             )
 
             if (isStreamable)
                 streamableFile = saveVideoFile(
                     context,
-                    path,
+                    null,
                     sharedStorageConfiguration,
                     appSpecificStorageConfiguration,
                     null,
-                    configuration.videoName,
-                    shouldSave = false
+                    configuration.videoName
                 )
 
             desFile?.let {
@@ -154,8 +148,7 @@ class VideoCompressor private constructor(private val uri: Uri): CoroutineScope 
                         sharedStorageConfiguration,
                         appSpecificStorageConfiguration,
                         isStreamable,
-                        configuration.videoName,
-                        shouldSave = true
+                        configuration.videoName
                     )
 
                     listener.onSuccess(result.size, result.path)
@@ -199,94 +192,94 @@ class VideoCompressor private constructor(private val uri: Uri): CoroutineScope 
         appSpecificStorageConfiguration: AppSpecificStorageConfiguration?,
         isStreamable: Boolean?,
         videoName: String,
-        shouldSave: Boolean?
     ): File? {
-        filePath?.let {
-            val videoFile = File(filePath)
+        var videoFile: File? = null
 
-            if (sharedStorageConfiguration != null) {
-                val videoFileName = validatedFileName(
-                    videoName,
-                    isStreamable
-                )
+        if (filePath != null) {
+            videoFile = File(filePath)
+        }
 
-                val saveLocation =
-                    when (sharedStorageConfiguration.saveAt) {
-                        SaveLocation.downloads -> {
-                            Environment.DIRECTORY_DOWNLOADS
-                        }
+        if (sharedStorageConfiguration != null) {
+            val videoFileName = validatedFileName(
+                videoName,
+                isStreamable
+            )
 
-                        SaveLocation.pictures -> {
-                            Environment.DIRECTORY_PICTURES
-                        }
-
-                        else -> {
-                            Environment.DIRECTORY_MOVIES
-                        }
+            val saveLocation =
+                when (sharedStorageConfiguration.saveAt) {
+                    SaveLocation.downloads -> {
+                        Environment.DIRECTORY_DOWNLOADS
                     }
 
-                if (Build.VERSION.SDK_INT >= 29) {
-                    val fullPath =
-                        if (sharedStorageConfiguration.subFolderName != null) "$saveLocation/${sharedStorageConfiguration.subFolderName}"
-                        else saveLocation
-                    if (shouldSave == true) {
-                        saveVideoInExternal(context, videoFileName, fullPath, videoFile)
-                    }
-                    return File(context.filesDir, videoFileName)
-                } else {
-                    val savePath =
-                        Environment.getExternalStoragePublicDirectory(saveLocation)
-
-                    val fullPath =
-                        if (sharedStorageConfiguration.subFolderName != null) "$savePath/${sharedStorageConfiguration.subFolderName}"
-                        else savePath.path
-
-                    val desFile = File(fullPath, videoFileName)
-
-                    if (!desFile.exists()) {
-                        try {
-                            desFile.parentFile?.mkdirs()
-                        } catch (e: IOException) {
-                            e.printStackTrace()
-                        }
+                    SaveLocation.pictures -> {
+                        Environment.DIRECTORY_PICTURES
                     }
 
-                    if (shouldSave == true) {
-                        context.openFileOutput(videoFileName, MODE_PRIVATE)
-                            .use { outputStream ->
-                                FileInputStream(videoFile).use { inputStream ->
-                                    val buf = ByteArray(4096)
-                                    while (true) {
-                                        val sz = inputStream.read(buf)
-                                        if (sz <= 0) break
-                                        outputStream.write(buf, 0, sz)
-                                    }
-
-                                }
-                            }
-
+                    else -> {
+                        Environment.DIRECTORY_MOVIES
                     }
-                    return desFile
                 }
+
+            if (Build.VERSION.SDK_INT >= 29) {
+                val fullPath =
+                    if (sharedStorageConfiguration.subFolderName != null) "$saveLocation/${sharedStorageConfiguration.subFolderName}"
+                    else saveLocation
+                if (videoFile != null) {
+                    saveVideoInExternal(context, videoFileName, fullPath, videoFile)
+                }
+                return File(context.filesDir, videoFileName)
             } else {
-                val videoFileName = validatedFileName(
-                    videoName,
-                    isStreamable
-                )
+                val savePath =
+                    Environment.getExternalStoragePublicDirectory(saveLocation)
 
                 val fullPath =
-                    if (appSpecificStorageConfiguration!!.subFolderName != null) "${appSpecificStorageConfiguration.subFolderName}/$videoFileName"
-                    else videoFileName
+                    if (sharedStorageConfiguration.subFolderName != null) "$savePath/${sharedStorageConfiguration.subFolderName}"
+                    else savePath.path
 
-                if (!File("${context.filesDir}/$fullPath").exists()) {
-                    File("${context.filesDir}/$fullPath").parentFile?.mkdirs()
+                val desFile = File(fullPath, videoFileName)
+
+                if (!desFile.exists()) {
+                    try {
+                        desFile.parentFile?.mkdirs()
+                    } catch (e: IOException) {
+                        e.printStackTrace()
+                    }
                 }
 
-                return File(context.filesDir, fullPath)
+                if (videoFile != null) {
+                    context.openFileOutput(videoFileName, MODE_PRIVATE)
+                        .use { outputStream ->
+                            FileInputStream(videoFile).use { inputStream ->
+                                val buf = ByteArray(4096)
+                                while (true) {
+                                    val sz = inputStream.read(buf)
+                                    if (sz <= 0) break
+                                    outputStream.write(buf, 0, sz)
+                                }
 
+                            }
+                        }
+
+                }
+                return desFile
             }
+        } else {
+            val videoFileName = validatedFileName(
+                videoName,
+                isStreamable
+            )
+
+            val fullPath =
+                if (appSpecificStorageConfiguration!!.subFolderName != null) "${appSpecificStorageConfiguration.subFolderName}/$videoFileName"
+                else videoFileName
+
+            if (!File("${context.filesDir}/$fullPath").exists()) {
+                File("${context.filesDir}/$fullPath").parentFile?.mkdirs()
+            }
+
+            return File(context.filesDir, fullPath)
+
         }
-        return null
     }
 
 
